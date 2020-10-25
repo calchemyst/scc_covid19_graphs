@@ -6,11 +6,14 @@ import logging
 import re
 import sys
 
+import selenium
 from selenium import webdriver
 from selenium.common.exceptions import WebDriverException, TimeoutException
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as ec
 from selenium.webdriver.common.by import By
+from webdriver_manager.chrome import ChromeDriverManager
+from webdriver_manager.firefox import GeckoDriverManager
 
 DRIVERS = {
     "chrome": webdriver.Chrome,
@@ -19,10 +22,13 @@ DRIVERS = {
 }
 
 
-def get_driver(args, options=None):
-    driver = DRIVERS[args.driver]
-    if options is not None:
-        return driver(options=options)
+def get_driver(driver_name: str) -> selenium.webdriver.Remote:
+    driver = DRIVERS[driver_name]
+    if driver_name == "chrome":
+        return driver(ChromeDriverManager().install())
+    if driver_name == "firefox":
+        fullpath = GeckoDriverManager().install()
+        return driver(executable_path=fullpath)
     return driver()
 
 
@@ -256,7 +262,7 @@ def main():
         logging.getLogger("selenium").setLevel(logging.INFO)
 
     logging.info("Booting webdriver...")
-    driver = get_driver(args)
+    driver = get_driver(args.driver)
     try:
         if args.days_past > 0:
             base = datetime.datetime(2020, 3, 26)
