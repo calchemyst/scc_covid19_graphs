@@ -149,7 +149,7 @@ def decimate_ticks(daterange: pd.Series) -> List[datetime]:
     return dateticks
 
 
-def plot_counties(dfs: List[pd.DataFrame], chart_type: str, filename: str) -> None:
+def plot_counties(dfs: List[pd.DataFrame], chart_type: Optional[str], filename: str) -> None:
     plt.switch_backend('Agg')
     plt.subplots()
     ax = plt.figure().add_subplot()

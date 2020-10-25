@@ -3,7 +3,7 @@ import logging
 import os
 import signal
 import uuid
-from typing import Mapping, Any, Iterable, List, Union, Tuple
+from typing import Mapping, Any, Iterable, List, Union, Tuple, Optional
 
 from flask import Flask, jsonify, url_for
 from flask import render_template, request
@@ -38,7 +38,7 @@ def sighup_handler(_unused, _unused2) -> None:
 signal.signal(signal.SIGHUP, sighup_handler)
 
 
-def render_graph(counties: Iterable[int], chart: str) -> str:
+def render_graph(counties: Iterable[int], chart: Optional[str]) -> str:
     logger = app.logger
     dfs = ca_data_parser.get_county_data(counties)
     if not dfs:
@@ -55,12 +55,12 @@ MAX_COUNTIES = 10
 
 
 @app.errorhandler(413)
-def request_too_large(_):
+def request_too_large(_) -> Tuple[str, int]:
     return jsonify(error=f"Too many counties (max {MAX_COUNTIES})"), 413
 
 
 @app.errorhandler(400)
-def bad_request(_):
+def bad_request(_) -> Tuple[str, int]:
     return jsonify(error=f"Invalid request parameters specified."), 400
 
 
@@ -75,7 +75,7 @@ def get_counties(req_json: List[Union[str, int]]) -> List[int]:
             except ValueError as e:
                 raise TypeError(e.args)
         elif type(s) == int:
-            counties.append(s)
+            counties.append(int(s))
         else:
             raise TypeError(f"Invalid inner type ({type(s)})")
     return counties
@@ -93,10 +93,11 @@ def handle_graph() -> Tuple[str, int]:
     counties_arg = request.json['counties']
     chart = None
     if "chart" in request.json:
-        chart = request.json['chart']
-        if type(chart) != str:
-            logger.warning("Bad arg type (%s) for chart", type(chart))
+        json_chart = request.json['chart']
+        if type(json_chart) != str:
+            logger.warning("Bad arg type (%s) for chart", type(json_chart))
             return abort(400)
+        chart = str(json_chart)
 
     logger.debug("chart type: %s", chart)
 
