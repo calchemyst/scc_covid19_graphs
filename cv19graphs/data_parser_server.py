@@ -1,7 +1,9 @@
 import json
+import logging
 import os
 import signal
 import uuid
+from typing import Mapping, Any, Iterable, List, Union, Tuple
 
 from flask import Flask, jsonify, url_for
 from flask import render_template, request
@@ -16,7 +18,7 @@ app = Flask(__name__)
 STATIC_FOLDER = os.path.join('static')
 
 
-def load_fips_county_mapping(filename='fips_county_mapping.json'):
+def load_fips_county_mapping(filename='fips_county_mapping.json') -> Mapping[str, Any]:
     with open(os.path.join(STATIC_FOLDER, filename)) as f:
         return json.load(f)
 
@@ -24,7 +26,7 @@ def load_fips_county_mapping(filename='fips_county_mapping.json'):
 fips_county_mapping = load_fips_county_mapping()
 
 
-def sighup_handler(signum, frame):
+def sighup_handler(_unused, _unused2) -> None:
     app.logger.info("SIGHUP received, reloading counties and mapping.")
     ca_data_parser.reload_us_counties()
     load_fips_county_mapping()
@@ -36,7 +38,7 @@ def sighup_handler(signum, frame):
 signal.signal(signal.SIGHUP, sighup_handler)
 
 
-def render_graph(counties, chart):
+def render_graph(counties: Iterable[int], chart: str) -> str:
     logger = app.logger
     dfs = ca_data_parser.get_county_data(counties)
     if not dfs:
@@ -53,16 +55,16 @@ MAX_COUNTIES = 10
 
 
 @app.errorhandler(413)
-def request_too_large(e):
+def request_too_large(_):
     return jsonify(error=f"Too many counties (max {MAX_COUNTIES})"), 413
 
 
 @app.errorhandler(400)
-def bad_request(e):
+def bad_request(_):
     return jsonify(error=f"Invalid request parameters specified."), 400
 
 
-def get_counties(req_json):
+def get_counties(req_json: List[Union[str, int]]) -> List[int]:
     counties = []
     if type(req_json) is not list:
         raise TypeError(f"Invalid outer type ({type(req_json)})")
@@ -80,7 +82,7 @@ def get_counties(req_json):
 
 
 @app.route('/graph', methods=['POST'])
-def handle_graph():
+def handle_graph() -> Tuple[str, int]:
     if not request.json:
         return abort(400)
     logger = app.logger
