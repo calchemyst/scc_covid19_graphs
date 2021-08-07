@@ -1,11 +1,10 @@
 import json
-import logging
 import os
 import signal
 import uuid
 from typing import Mapping, Any, Iterable, List, Union, Tuple, Optional
 
-from flask import Flask, jsonify, url_for
+from flask import Flask, jsonify, url_for, Response, g
 from flask import render_template, request
 from werkzeug.exceptions import abort
 
@@ -31,7 +30,7 @@ def sighup_handler(_unused, _unused2) -> None:
     ca_data_parser.reload_us_counties()
     load_fips_county_mapping()
     app.logger.info("Done.  latest date=%s, counties in mapping=%d",
-                    ca_data_parser.latest_date,
+                    ca_data_parser.pglobals.latest_date,
                     len(fips_county_mapping.keys()))
 
 
@@ -40,7 +39,7 @@ signal.signal(signal.SIGHUP, sighup_handler)
 
 def render_graph(counties: Iterable[int], chart: Optional[str]) -> str:
     logger = app.logger
-    dfs = ca_data_parser.get_county_data(counties)
+    dfs = ca_data_parser.get_county_data(counties, g.pglobals.us_counties)
     if not dfs:
         raise NoDataAvailableException("No counties matched in data!")
 
@@ -55,13 +54,19 @@ MAX_COUNTIES = 10
 
 
 @app.errorhandler(413)
-def request_too_large(_) -> Tuple[str, int]:
+def request_too_large(_) -> Tuple[Response, int]:
     return jsonify(error=f"Too many counties (max {MAX_COUNTIES})"), 413
 
 
 @app.errorhandler(400)
-def bad_request(_) -> Tuple[str, int]:
+def bad_request(_) -> Tuple[Response, int]:
     return jsonify(error=f"Invalid request parameters specified."), 400
+
+
+@app.before_request
+def add_data_to_globals():
+    g.pglobals = ca_data_parser.pglobals
+    g.fips_county_mapping = fips_county_mapping
 
 
 def get_counties(req_json: List[Union[str, int]]) -> List[int]:
@@ -82,7 +87,7 @@ def get_counties(req_json: List[Union[str, int]]) -> List[int]:
 
 
 @app.route('/graph', methods=['POST'])
-def handle_graph() -> Tuple[str, int]:
+def handle_graph() -> Tuple[Response, int]:
     if not request.json:
         return abort(400)
     logger = app.logger
@@ -105,7 +110,7 @@ def handle_graph() -> Tuple[str, int]:
         return abort(413)
     if len(counties_arg) == 0:
         logger.warning("No counties in request?")
-        return "", 204
+        return Response("No counties in request, no content"), 204
 
     try:
         counties = get_counties(counties_arg)
@@ -118,20 +123,20 @@ def handle_graph() -> Tuple[str, int]:
         filename = render_graph(counties, chart)
     except NoDataAvailableException:
         logger.warning("No data found for specified counties.")
-        return "", 204
+        return Response("No data found for requested counties"), 204
 
     return jsonify({
         "covid_graph": url_for("static", filename=filename)
-    })
+    }), 200
 
 
 @app.route('/')
 @gzipped
 def index():
     return render_template('index.html',
-                           fips_county_mapping=fips_county_mapping,
+                           fips_county_mapping=g.fips_county_mapping,
                            max_counties=MAX_COUNTIES,
-                           latest_date=ca_data_parser.latest_date,
+                           latest_date=g.pglobals.latest_date,
                            chart_types=list(ca_data_parser.CHARTS.keys()))
 
 

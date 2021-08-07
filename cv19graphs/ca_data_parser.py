@@ -1,4 +1,6 @@
 import logging
+from dataclasses import dataclass
+
 import math
 import time
 from datetime import datetime, timedelta
@@ -38,12 +40,17 @@ CHARTS = {
 DEFAULT_CHART_TYPE = "cases"
 MAX_TICKS = 20
 
-us_counties = pd.DataFrame()
-latest_date = ""
+
+@dataclass
+class ParserGlobals:
+    us_counties: pd.DataFrame
+    latest_date: str
+
+
+pglobals = ParserGlobals(pd.DataFrame(), "")
 
 
 def reload_us_counties() -> None:
-    global us_counties, latest_date
     counties = pd.read_csv("us-counties.csv",
                            dtype={"county": "string",
                                   "state": "string",
@@ -75,10 +82,10 @@ def reload_us_counties() -> None:
     counties["cases_pc"] = counties.cases / counties.population
     counties["deaths_pc"] = counties.deaths / counties.population
 
-    latest_date = counties.date.tail(1).dt.strftime("%Y-%m-%d").values[0]
-    if not us_counties.empty:
-        del us_counties
-        us_counties = counties
+    pglobals.latest_date = counties.date.tail(1).dt.strftime("%Y-%m-%d").values[0]
+    if not pglobals.us_counties.empty:
+        del pglobals.us_counties
+        pglobals.us_counties = counties
 
 
 logger.info("Loading covid-19 data by county...")
@@ -92,8 +99,10 @@ class NoDataAvailableException(BaseException):
     pass
 
 
-def get_county_data(counties: Iterable[int]) -> List[pd.DataFrame]:
-    assert not us_counties.empty
+def get_county_data(counties: Iterable[int], us_counties=pglobals.us_counties) -> List[pd.DataFrame]:
+    if us_counties.empty:
+        logger.warning("us_counties is empty!")
+        return []
     dfs = []
     for fips in counties:
         df = us_counties.loc[us_counties.fips == fips]
