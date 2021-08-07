@@ -76,7 +76,9 @@ def reload_us_counties() -> None:
     counties["deaths_pc"] = counties.deaths / counties.population
 
     latest_date = counties.date.tail(1).dt.strftime("%Y-%m-%d").values[0]
-    us_counties = counties
+    if not us_counties.empty:
+        del us_counties
+        us_counties = counties
 
 
 logger.info("Loading covid-19 data by county...")
